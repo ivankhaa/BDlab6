@@ -13,7 +13,7 @@
         <!-- Верхня частина -->
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition/>
+                <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="2*"/>
@@ -53,7 +53,8 @@
                                                     <RowDefinition Height="10"/>
                                                     <RowDefinition Height="auto"/>
                                                     <RowDefinition Height="10"/>
-                                                    
+                                                    <RowDefinition Height="auto"/>
+                                                    <RowDefinition Height="10"/>
                                                     <RowDefinition/>
                                                 </Grid.RowDefinitions>
 
@@ -70,7 +71,7 @@
 
                                                 <Label Grid.Column="0" Grid.Row="7" Content="Номер телефону*"/>
                                                 <TextBox Name="phone_number" Grid.Column="1" Grid.Row="7"/>
-                                                
+
                                                 <Label Grid.Column="0" Grid.Row="9" Content="Рівень 0-10*"/>
                                                 <TextBox Name="passed_difficulty" Grid.Column="1" Grid.Row="9"/>
 
@@ -91,15 +92,17 @@
                     </TabControl>
                 </Border>
             </Grid>
-
             <!-- Верхня права частина -->
             <Grid Grid.Row="0" Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="20"/>
+                </Grid.RowDefinitions>
                 <!-- Вміст правої частини -->
                 <Border  BorderBrush="DarkSlateGray" BorderThickness="0.5">
-                    <ScrollViewer  VerticalScrollBarVisibility="Auto">
-                        <TextBox Name ="infoBox" Text="" IsReadOnly="True" TextWrapping="Wrap"/>
-                    </ScrollViewer>
+                    <TextBox Name ="infoBox" Text="" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="320" VerticalScrollBarVisibility="Visible"/>
                 </Border>
+                <Button Name="Upload" Content="Upload" Grid.Row="1" Width="100" Click="Upload_Click"/>
             </Grid>
         </Grid>
         <Grid Grid.Row="1" Grid.ColumnSpan="2">

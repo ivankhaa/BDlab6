@@ -21,7 +21,8 @@ namespace WpfBD
         public string User { get; private set; }
         public string Database { get; private set; }
         public string Password { get; private set; }
-    public ConnectionWindow()
+        internal DatabaseAccess dbAccess;
+        public ConnectionWindow()
         {
             InitializeComponent();
         }
@@ -34,7 +35,7 @@ namespace WpfBD
            
             try
             {
-                DatabaseAccess dbAccess = new DatabaseAccess($"Server={tbServer.Text};Database={tbDatabase.Text};User={tbUser.Text};Password={tbPassword.Password};",null);
+                dbAccess = new DatabaseAccess(Server,User, Database,Password,null);
                 DialogResult = true; // закриваємо вікно підключення та повертаємо true
             }
             catch (Exception ex)

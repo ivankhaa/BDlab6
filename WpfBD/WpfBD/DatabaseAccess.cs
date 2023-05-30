@@ -7,52 +7,26 @@ using MySql.Data.MySqlClient;
 namespace WpfBD
 {
     class DatabaseAccess
-    {
+    {  
         private readonly string connectionString;
-        private Log _log;
-        public DatabaseAccess(string connectionString, Log log)
+        public Log _log;
+        private MySqlConnection connection = null;
+        public DatabaseAccess(string Server, string User, string Database, string Password, Log log)
         {
+            string connectionString = $"Server={Server};Database={Database};User={User};Password={Password};";
             _log = log;
-            using (MySqlConnection connection = new MySqlConnection(connectionString))
+            using (MySqlConnection connect = new MySqlConnection(connectionString))
             {
-                connection.Open();
                 this.connectionString = connectionString;
+                connection = connect;
+                
             }
-            
+            connection.Open();
         }
-        public void Update(string tableName, string columnName, Dictionary<string, object> data)
-        {
-            using (MySqlConnection connection = new MySqlConnection(connectionString))
-            {
-                try
-                {
-                    connection.Open();
-                    string idName = data.Keys.ElementAt(0);
-                    int id = (int)data.Values.ElementAt(0);
-
-                    object columnData = data[columnName];
-
-                    string sql = $"UPDATE {tableName} SET {columnName}='{columnData}' WHERE {idName} = {id}";
-                    MySqlCommand command = new MySqlCommand(sql, connection);
-                    command.ExecuteNonQuery();
-          
-                    _log.Text = $"Відредагована комірка: Рядок з {idName} = {id}; Стовпчик {columnName}; Таблиця {tableName}";
-                }
-                catch (MySqlException ex)
-                {
-                    _log.Text = ex.ToString();
-                }
-            }
-        }
-
-
         public Dictionary<string, List<object>> GetTable(string tableName)
         {
             Dictionary<string, List<object>> rows = new Dictionary<string, List<object>>();
-
-            using (MySqlConnection connection = new MySqlConnection(connectionString))
-            {
-                connection.Open();
+                //connection.Open();
                 MySqlCommand command = new MySqlCommand($"SELECT * FROM {tableName}", connection);
                 MySqlDataReader reader = command.ExecuteReader();
 
@@ -87,17 +61,17 @@ namespace WpfBD
                         rows[columnName].Add("");
                     }
                 }
-            }
-        
+            reader.Close();
+
             return rows;
         }
         public Dictionary<string, Dictionary<string, List<object>>> GetAllTables()
         {
             Dictionary<string, Dictionary<string, List<object>>> tables = new Dictionary<string, Dictionary<string, List<object>>>();
-
             using (MySqlConnection connection = new MySqlConnection(connectionString))
             {
-                connection.Open();
+
+                 connection.Open();
                 MySqlCommand command = new MySqlCommand($"SHOW TABLES", connection);
                 MySqlDataReader reader = command.ExecuteReader();
 
@@ -107,7 +81,6 @@ namespace WpfBD
                     tables[tableName] = GetTable(tableName);
                 }
             }
-
             return tables;
         }
         public bool Insert(string tableName, Dictionary<string, object> row)
@@ -116,14 +89,10 @@ namespace WpfBD
             string values = string.Join(",", row.Values.Select(value => value.ToString() == "" ? "NULL" : $"'{value.ToString()}'"));
 
             string query = $"INSERT INTO {tableName} ({columnNames}) VALUES ({values})";
-
-            using (MySqlConnection connection = new MySqlConnection(connectionString))
-            {
                 MySqlCommand command = new MySqlCommand(query, connection);
 
                 try
                 {
-                    connection.Open();
                     command.ExecuteNonQuery();
                     _log.Text = $"Запис доданий до таблиці {tableName}";
                 }
@@ -132,16 +101,32 @@ namespace WpfBD
                     _log.Text = ex.Message.ToString();
                     return false;
                 }
-            }
             return true;
+        }
+        public void Update(string tableName, string columnName, Dictionary<string, object> data)
+        {
+            try
+            {
+                string idName = data.Keys.ElementAt(0);
+                int id = (int)data.Values.ElementAt(0);
+
+                object columnData = data[columnName];
+
+                string sql = $"UPDATE {tableName} SET {columnName}='{columnData}' WHERE {idName} = {id}";
+                MySqlCommand command = new MySqlCommand(sql, connection);
+                command.ExecuteNonQuery();
+
+                _log.Text = $"Відредагована комірка: Рядок з {idName} = {id}; Стовпчик {columnName}; Таблиця {tableName}";
+            }
+            catch (MySqlException ex)
+            {
+                _log.Text = ex.ToString();
+            }
         }
         public bool Delete(string tableName, string idName, int id)
         {
             try
             {
-                using (MySqlConnection connection = new MySqlConnection(connectionString))
-                {
-                    connection.Open();
 
                     MySqlCommand command = new MySqlCommand();
                     command.Connection = connection;
@@ -155,7 +140,7 @@ namespace WpfBD
                         _log.Text = $"No rows were deleted from the {tableName} table with {idName} = {id}.";
                         return false;
                     }
-                }
+                
             }
             catch (MySqlException ex)
             {
@@ -169,46 +154,39 @@ namespace WpfBD
         {
             string query = $"ALTER TABLE {tableName} AUTO_INCREMENT = {n};";
 
-            using (MySqlConnection connection = new MySqlConnection(connectionString))
-            {
+
                 MySqlCommand command = new MySqlCommand(query, connection);
 
                 try
                 {
-                    connection.Open();
                     command.ExecuteNonQuery();
                     _log.Text = $"Встановлено AUTO_INCREMENT = {n} у таблиці {tableName}";
                 }
                 catch (MySqlException ex)
                 {
                     _log.Text = ex.ToString();
-                }
-            }
+               }
+            
         }
 
         public bool IsView(string tableName)
         {
             string query = $"SELECT COUNT(*) FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = '{tableName}'";
 
-            using (MySqlConnection connection = new MySqlConnection(connectionString))
-            {
+
                 using (MySqlCommand command = new MySqlCommand(query, connection))
                 {
-                    connection.Open();
                     Int64 count = (Int64)command.ExecuteScalar();
                     return count > 0;
                 }
-            }
+            
         }
         public bool IsReadOnly(string tableName)
         {
             string query = $"SELECT ReadOnly FROM tablesinfo WHERE TableName = '{tableName}'";
 
-            using (MySqlConnection connection = new MySqlConnection(connectionString))
-            {
                 using (MySqlCommand command = new MySqlCommand(query, connection))
                 {
-                    connection.Open();
                     object result = command.ExecuteScalar();
 
                     if (result != null && result != DBNull.Value)
@@ -220,15 +198,12 @@ namespace WpfBD
                         return false;
                     }
                 }
-            }
+            
         }
         public void Pay(string tableName, string idName, int id, string PayMethod)
         {
             try
             {
-                using (MySqlConnection connection = new MySqlConnection(connectionString))
-                {
-                    connection.Open();
 
                     MySqlCommand command = new MySqlCommand();
                     command.Connection = connection;
@@ -244,7 +219,7 @@ namespace WpfBD
                     string sql = $"UPDATE PaymentsHistory SET PaymentMethod='{PayMethod}' WHERE {idName} ={id} AND PaymentDate BETWEEN DATE_ADD(NOW(), INTERVAL -5 SECOND) AND DATE_ADD(NOW(), INTERVAL 5 SECOND);";
                     command = new MySqlCommand(sql, connection);
                     command.ExecuteNonQuery();
-                }
+                
             }
             catch (MySqlException ex)
             {

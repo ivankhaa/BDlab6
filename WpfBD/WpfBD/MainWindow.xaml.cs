@@ -31,9 +31,9 @@ namespace WpfBD
             get { return _text; }
             set
             {
-                _text = value + "\n-----------------------------------------------------\n" + _text;
-                if (_text.Length > 370)
-                    _text = _text.Substring(0, 370) + "...";
+                _text = value + "\n-------------------------------------------------\n" + _text;
+              /*  if (_text.Length > 370)
+                    _text = _text.Substring(0, 370) + "...";*/
 
                 OnPropertyChanged("Text");
             }
@@ -63,6 +63,7 @@ namespace WpfBD
         List<ComboBoxList> comboBoxList { get; set; }
         DateTime Date { get; set; }
         Dictionary<string, Dictionary<string, List<object>>> data = null;
+        List<Dictionary<string, object>> actions = null;
         DatabaseAccess dbAccess = null;
         string TabItemName { get; set; }
         Log _log;
@@ -78,13 +79,16 @@ namespace WpfBD
             _log.PropertyChanged += Log_PropertyChanged;
             var connectionWindow = new ConnectionWindow();
             if (connectionWindow.ShowDialog() == true)
-                dbAccess = new DatabaseAccess($"server={connectionWindow.Server};user={connectionWindow.User};database={connectionWindow.Database};password={connectionWindow.Password};", _log);
+            {
+                dbAccess = connectionWindow.dbAccess;
+                dbAccess._log = _log;
+            }
             else
             {
                 Close();
                 return;
             }
-
+            actions = new List<Dictionary<string, object>>();
             data = dbAccess.GetAllTables();
         }
         private void GetAllTables()
@@ -119,7 +123,12 @@ namespace WpfBD
                 return str;
             }
         }
-
+        private void AddActions(string name, object obj) 
+        {
+            Dictionary<string, object> tmp = new Dictionary<string, object>();
+            tmp.Add(name, obj);
+            actions.Add(tmp);
+        }
         public void BindDataToGrid(DataGrid grid, Dictionary<string, List<object>> data)
         {
             grid.Columns.Clear();
@@ -267,22 +276,27 @@ namespace WpfBD
                 }
             }
 
-            if (TableDB.Items.Count > indexRow)
-            {
-                TableDB.Items.RemoveAt(indexRow);
-            }
-
         }
         private void DeleteButton_Click(object sender, RoutedEventArgs e)
         {
+            Dictionary<string, object> del = new Dictionary<string, object>();
             int index = TableDBdel.SelectedIndex;
             MessageBoxResult result = MessageBox.Show("Ви дійсно бажаєте видалити цей рядок?", "Попередження", MessageBoxButton.YesNo, MessageBoxImage.Warning);
 
             if (result == MessageBoxResult.Yes)
             {
-                RowDelete(data[TabItemName], index);
-                TableDBdel.Items.RemoveAt(index);
-                GetAllTables();
+                del.Add(TabItemName, index);
+                del.Add("data", data[TabItemName]);
+                AddActions("DELETE", del);
+                if (TableDB.Items.Count > index)
+                {
+                    TableDB.Items.RemoveAt(index);
+                    TableDBdel.Items.RemoveAt(index);
+                }
+               // RowDelete(data[TabItemName], index);
+               
+                //GetAllTables();
+                data[TabItemName] = ExtractDataFromGrid(TableDB);
                 BindDataToGrid(TableDB, data[TabItemName]);
             }
         }
@@ -292,10 +306,17 @@ namespace WpfBD
             var grid = this.FindName($"{TabItemName}Grid") as Grid;
 
             var row = new Dictionary<string, object>();
+            var TabRow = new Dictionary<string, Dictionary<string, object>>();
             foreach (var child in grid.Children)
             {
                 if (child is TextBox textBox)
                 {
+                    if (textBox.Text == "") 
+                    {
+                        _log.Text = $"Column {textBox.Name} NOT NULL";
+                        return;
+                    }
+                        
                     row.Add(textBox.Name, textBox.Text);
                     textBox.Text = "";
                 }
@@ -315,13 +336,66 @@ namespace WpfBD
                     row.Add(comboBox.Name, comboBox.SelectedValue);
                 else if (child is DatePicker datePicker)
                     row.Add(datePicker.Name, datePicker.SelectedDate.Value.ToString("yyyy.MM.dd"));
+            }
+            /*            if (dbAccess.IsView(TabItemName))
+                            additionalTag = "tab";
+                        dbAccess.Insert(TabItemName + additionalTag, row);
+                        GetAllTables();*/
+            int maxid = 1;
+            if (data.ContainsKey(TabItemName))
+            {
+                object value = data[TabItemName].Values.ElementAt(0);
+
+                if (value is List<object> list && list.Count > 0)
+                {
+                     maxid = list.Max(item => item is int id ? id : 0);
+                    maxid += 1;
+                }
 
             }
-            if (dbAccess.IsView(TabItemName))
-                additionalTag = "tab";
-            dbAccess.Insert(TabItemName + additionalTag, row);
-            GetAllTables();
+            Dictionary<string, object> newDictionary = new Dictionary<string, object>();
+
+            // Вставка новой записи в начало словаря
+            newDictionary.Add(data[TabItemName].ElementAt(0).Key, maxid);
+
+            // Копирование оставшихся элементов из исходного словаря в новый словарь
+            foreach (var pair in row)
+            {
+                newDictionary.Add(pair.Key, pair.Value);
+            }
+
+            row = newDictionary;
+            foreach (var kvp in row)
+            {
+                data[TabItemName][kvp.Key].Add(kvp.Value);
+            }
             BindDataToGrid(TableDB, data[TabItemName]);
+            TabRow.Add(TabItemName + additionalTag, row);
+
+            AddActions("INSERT", TabRow);
+            
+        }
+        private void Upload_Click(object sender, RoutedEventArgs e) 
+        {
+            foreach (var item in actions)
+                if (item.ElementAt(0).Key == "INSERT")
+                {
+                    var inTab = (Dictionary<string, Dictionary<string, object>>)item.Values.First();
+                    dbAccess.Insert(inTab.First().Key, inTab.First().Value);
+                }
+                else if (item.ElementAt(0).Key == "DELETE")
+                {
+                    var dlTab = (Dictionary<string, object>)item.Values.First();
+                    RowDelete((Dictionary<string, List<object>>)dlTab["data"], (int)dlTab.First().Value);
+                }
+                else if (item.ElementAt(0).Key == "UPDATE")
+                {
+                    var upTab = (Dictionary<string, Dictionary<string, Dictionary<string, object>>>)item.Values.First();
+                    dbAccess.Update(upTab.First().Value.First().Key, upTab.First().Key, upTab.First().Value.First().Value);
+                }
+            GetAllTables();
+            BindDataToGrid(TableDB,data[TabItemName]);
+            actions = new List<Dictionary<string, object>>();
         }
         private void ComboBox_PreviewKeyUp(object sender, KeyEventArgs e)
         {
@@ -375,11 +449,16 @@ namespace WpfBD
 
                 if (originalValue != editedValue)
                 {
+                    Dictionary<string, Dictionary<string, object>> tab = new Dictionary<string, Dictionary<string, object>>();
+                    Dictionary<string, Dictionary<string, Dictionary<string, object>>> upd = new Dictionary<string, Dictionary<string, Dictionary<string, object>>>();
+                    tab.Add(TabItemName, row);
+                    upd.Add(columnName, tab);
                     // Значення було відредаговано
                     row[columnName] = editedValue;
+                    AddActions("UPDATE", upd);
                     data[TabItemName] = ExtractDataFromGrid(TableDB);
-                    dbAccess.Update(TabItemName, columnName, row);
-                    GetAllTables();
+                    //dbAccess.Update(TabItemName, columnName, row);
+                    //GetAllTables();
                     BindDataToGrid(TableDB, data[TabItemName]);
                 }
 
